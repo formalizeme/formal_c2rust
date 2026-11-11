@@ -1,48 +1,38 @@
 (** * Pointer arithmetic -> base + index, on Clight
 
-    Two kinds of pointer are rewritten.
+    The pass works on one function at a time. It plans a rewrite, applies it
+    and checks the result, and it keeps the original function when a check
+    fails or a statement cannot be rewritten exactly.
 
-    Pointer temporaries. A pointer temporary whose value moves (some statement
-    assigns it [q + n] or [q - n]) is split, together with every pointer
-    temporary it is copied to or from, into a base temporary and a [long]
-    index temporary:
+    Planning. A candidate is a pointer parameter or temporary whose element
+    type is complete (never [void *] or a function pointer). Assignments
+    [p = q] and [p = q +/- n] link candidates, and a group is a connected
+    component of these links. A group is rewritten when one of its links is
+    an offset and all its members have one element size. Its members share
+    one base unless the group has two or more parameters, no member receives
+    a value from outside the group, or a base write happens while another
+    member is live ([live_stmt]).
+
+    Rewrite ([B] base, [i] index, [W] widening as C pointer arithmetic):
 <<
-      p = q + n     becomes   p_idx = q_idx + (long) n;  p_base = q_base
-      p = q         becomes   p_idx = q_idx;  p_base = q_base
-      p = e         becomes   p_base = e;  p_idx = 0          (any other e)
-      p + n         becomes   p_base + (p_idx + (long) n)
-      any other p   becomes   p_base + p_idx
+      Entry       parameter p    p_base = p;  p_idx = 0
+      Offset      p = q +/- n    p_idx = q_idx +/- W(n);  [p_base = q_base]
+      Copy        p = q          p_idx = q_idx;  [p_base = q_base]
+      SelfCopy    p = p          (nothing)
+      RebaseCall  p = f(...)     p_base = f(...);  p_idx = 0
+      Rebase      p = e          p_base = e;  p_idx = 0     (any other e)
+      Access      p +/- n        p_base + (p_idx +/- W(n))
+      IndexOp     p == q, p != q, p - q on a shared base, 1-byte elements
+                                 p_idx == q_idx, ...
+      Materialize any other p    p_base + p_idx
 >>
-    The value of [p] is therefore always [p_base + p_idx], computed exactly
-    the way Clight computes pointer arithmetic.
+    [p_base = q_base] is emitted only when p and q have different bases.
+    Every live member p keeps the value [p_base + p_idx], computed as Clight
+    computes pointer arithmetic. Members other than parameters are no longer
+    declared. Signatures and memory layout are unchanged.
 
-    Pointers stored in memory, an extension that PtrIdxproof.v
-    does not cover, used only when [mem] is set. A location [L] of pointer type (a
-    struct field, a global, [*pp]) whose address depends only on temporaries,
-    and that the function moves ([L = L + n]), gets a cache: temporaries
-    [L_base] and [L_idx]. Memory is never changed: every store to [L] is
-    still made (write-through), so the cache is only a second view of it.
-<<
-      L = L + n     becomes   L_idx = L_idx + (long) n;  L = L_base + L_idx
-      L = e         becomes   L_base = (T) e;  L_idx = 0;  L = L_base
-      a read of L   becomes   L_base + L_idx
->>
-    The cache is valid while nothing can have changed [L]: a call to a
-    function that may write memory, a store that may overlap [L], or a new
-    value for a temporary in [L]'s address makes it stale. It is then reloaded
-    before the next statement that uses [L]'s value, as [L_base = L - L_idx]:
-    the index keeps counting, and if [L] did not change, the base is the same.
-    [L_idx] starts at 0 when the function starts.
-
-    Members of a group share one base temporary unless a member is rebased
-    while another one is still live (a liveness analysis decides). The
-    original pointer temporaries are no longer declared.
-
-    [==], [!=] and pointer differences between two pointers with the same
-    base temporary and 1-byte elements compare or subtract the indices;
-    other comparisons use [base + idx]. Both are exact. Function signatures and memory
-    layout are not changed. A function containing something these rules
-    cannot express exactly is left unchanged. *)
+    Checks ([plan_ok], with [lcheck] for shared bases) validate the plan, and
+    the proof in PtrIdxproof.v uses only them. *)
 
 Require Import Coqlib Maps Integers AST Errors Ctypes Cop Clight Builtins.
 

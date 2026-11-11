@@ -1,26 +1,6 @@
 (* Clight printed as plain C that clang accepts (ptridxgen -valid-c).
 
-   A utility outside the verified pass. PrintClight's output is C-like but
-   not C; this printer differs in:
-   - temporaries have plain names (s_base, t128), not $s_base, $128;
-   - __func__ is C's identifier again, not a global CompCert made;
-   - va_list values are __builtin_va_list again (recovered from the C AST
-     and from how values flow into va_arg and the v*printf functions), and
-     CompCert's __compcert_va_* calls are __builtin_va_arg;
-   - 8-bit unsigned is char and 64-bit is long (the same on aarch64), so
-     the code agrees with string literals and the C library; library
-     functions are declared as the C library does (const, long long, FILE),
-     unprototyped ones with the types of their calls;
-   - static definitions stay static; standard noreturn functions are noreturn;
-   - calls through pointers, negative literals, floats, labels and
-     anonymous members are printed as C;
-   - a loop whose step is not an expression jumps to the step with goto;
-   - global initializers are rebuilt from their bytes and their type, and
-     a long run of zero stores into a local is one memset;
-   - pointer conversions that Clight makes implicitly are explicit casts,
-     and so are the conversions of signed/unsigned comparisons;
-   - what compilers warn about in this style of code is avoided: unused
-     variables and labels, ambiguous operator mixes, const discarded. *)
+   A utility outside the verified pass. *)
 
 open Format
 open Camlcoq
