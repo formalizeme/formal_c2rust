@@ -102,3 +102,6 @@ uv run c2r run CBench/amp --rbench RBench/amp --seed 0 -o runs/amp-new \
 ```
 
 Add `--set input.representation=original_c` to skip C refactoring.
+
+
+Due to their large size, the raw outputs of all baseline and Rustine runs are hosted on [Zenodo](https://doi.org/10.5281/zenodo.24179970).
