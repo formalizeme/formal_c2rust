@@ -1,0 +1,117 @@
+# Main configuration (steps.md §5). Ablation files override single fields;
+# every field and its allowed values are defined in pipeline/c2r/config.py.
+
+experiment: E2                  # E1 | E2
+projects: [amp]                 # "all" or a list of CBench project names
+seeds: [0, 1, 2]
+target: null                    # D3 (open): aarch64-linux | x86_64-linux
+
+benchmark:
+  c_dir: CBench
+  rust_dir: RBench
+  rust_project: null             # optional explicit RBench crate; c2r run --rbench overrides this
+
+model:                          # A9
+  provider: openrouter
+  id: null                      # set an OpenRouter model id before any LLM call
+  temperature: 0.2
+  max_tokens: 8192
+  timeout: 600                  # enforced wall-clock deadline per model request
+  response_format: json_schema  # json_schema | json_object | none
+  reasoning_effort: null        # provider default; none | minimal | low | medium | high | xhigh | max
+
+input:
+  representation: clight_pass   # A1: original_c | clight | clight_pass | original_c+clight_pass
+  restore_names: false          # A5: full §13 restoration is not implemented
+refactor:
+  memory_pointers: false        # A8: caches for pointers in memory (outside the proof)
+  # CompCert flags, tried in order (see RefactorConfig in c2r/config.py)
+  flag_sets: [[], [-D_DEFAULT_SOURCE], [-fall], [-fall, -D_DEFAULT_SOURCE]]
+  extra_flags: []               # added to every attempt
+  timeout: 120                  # seconds per ptridxgen call
+  memory_limit_mb: 2048         # address-space cap per ptridxgen call
+  keep_rocq_ast: false          # keep <file>.v outputs (about 100 MB for CRUST-Bench)
+rewrites:                       # meaning-preserving source rewrites before CompCert (c2r/rewrite.py)
+  binary_literals: true         # 0b1010u -> 0xau
+  double_suffix: true           # 9.81d -> 9.81
+  large_literals: false         # literal above LLONG_MAX -> ...ULL: GCC types it __int128, so off
+  labels_at_block_end: true     # default: } -> default: ; }
+  case_ranges: true             # case 1 ... 3: -> case 1: case 2: case 3:
+  empty_initializers: true      # = {} and (T){} -> {0}
+  gnu_builtins: true            # __builtin_popcount etc. -> portable definitions (-include)
+  void_pointer_arithmetic: true # p + n on void * -> (void *)((char *)(p) + (n))
+context: scc                    # A2: none | direct | scc
+granularity: unit               # A6: unit | project
+translation:
+  interface_mode: auto           # auto: E2 -> fixed, E1 -> free; or fixed | free
+  interface_files: []            # empty: use RBench/<project>/src/interfaces/*.rs
+  scope: library                # library | all (all includes C tests/examples)
+  translate_macros: false        # otherwise keep macros as source context
+  include_external: true
+  dependency_depth: 1
+  incomplete_graph: error        # error | allow (explicitly provisional context)
+  missing_representation: error  # error | original_c | failed_units; c2r run selects failed_units
+  require_rust_context: false    # true: block jobs missing translated Rust dependencies
+  max_prompt_chars: 64000        # checked before model calls; null explicitly disables the limit
+  lowered_expansion_ratio: 8.0   # use original C when lowering expands code beyond this ratio
+  lowered_expansion_min_chars: 8000
+  item_map: null                 # optional JSON mapping source item IDs to lowered/Rust names
+  rust_artifacts: null           # optional JSON of already translated dependencies
+  indirect_calls: warn           # warn | error; candidate edges are not points-to results
+  legacy_c_diagnostics: true      # demote only three legacy-C conversion/declaration diagnostics
+  clang_compatibility: true       # recorded retries for feature macros, C23 and x86-only original C
+  continue_after_failure: true   # E2 callers may use fixed signatures after callee failure
+rust_project:
+  crate_name: null               # auto from fixed Cargo.toml or normalized project name
+  edition: auto                  # auto | "2018" | "2021" | "2024"
+  public_modules: true
+  copy_manifest_dependencies: true  # fixed mode only
+  dependencies: {}               # explicit Cargo dependency additions/overrides
+  module_map: {}                 # C file path -> src/...rs
+  interface_map: {}              # supplied Rust interface path -> src/...rs
+runner:
+  compile_timeout: 120
+  offline: true                 # Cargo uses only installed/cached dependencies
+  cargo_jobs: 1
+  max_model_calls: null          # total request limit across jobs and resumed runs
+  max_edit_files: 16
+  continue_on_failure: true
+  output_protocol: auto          # auto | fixed_functions | edits
+validation:
+  build_timeout: 120
+  test_timeout: 30
+  offline: true
+  cargo_jobs: 1
+  test_threads: 1
+  include_ignored: false
+  targets: []                    # empty: all existing benchmark test targets
+  support_files: []              # explicit benchmark-relative fixtures/helpers
+  dependencies: {}               # dev-dependency overrides for the isolated harness
+  keep_workspace: true
+metrics:
+  enabled: true
+  clippy: false                  # optional compiler lint collection; does not affect acceptance
+  timeout: 120
+hints:                          # A4, A4b
+  enabled: false                 # pointer-hint analyses are not implemented; true is rejected
+  kinds: [array, derived, mutability, ownership, nullability]
+  include_heuristic: false
+  show_tags: true
+repair:                         # A7
+  max_retries: 3
+  feedback: [compiler]          # compiler | tests
+idiomatic_stage: false          # A3: automatically refactor completed fixed-interface Rust into a validated v2
+renaming: none                  # C1: none | meaningful
+
+tools:
+  compcert_dir: CompCert
+  compcert_stdlib: CompCert/runtime   # passed as -stdlib (CompCert's own standard headers)
+  opam: ~/.local/bin/opam
+  opam_switch: compcert
+  cargo: cargo
+  rust_toolchain: nightly-2025-05-13
+  clang: clang
+output:
+  runs_dir: runs
+  refactored_dir: results/refactored
+  work_dir: runs/work           # scratch space on disk (/tmp is RAM-backed here)
