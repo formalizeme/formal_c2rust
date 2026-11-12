@@ -1,3 +1,7 @@
+# Idiomatic C-to-Rust Translation Through Verified Pointer Arithmetic Refactoring
+
+---
+
 # Pointer-arithmetic refactoring on CompCert
 
 This is CompCert 3.18 with one added pass in `ptridx/`. The pass rewrites
