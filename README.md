@@ -1,4 +1,4 @@
-# Idiomatic C-to-Rust Translation Through Verified Pointer Arithmetic Refactoring
+# Verified Pointer Arithmetic Refactoring for Safer C-to-Rust Translation
 
 ---
 
